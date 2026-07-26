@@ -1,0 +1,1122 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #ffffff;
+  --fg: #1a1a1a;
+  --toolbar-bg: #f5f5f5;
+  --toolbar-border: #d8d8d8;
+  --btn-hover: #e4e4e4;
+  --btn-active: #d0d0d0;
+  --placeholder: #aaaaaa;
+  --link: #0066cc;
+  --quote-border: #c0c0c0;
+  --quote-fg: #666666;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1e1e1e;
+    --fg: #e2e2e2;
+    --toolbar-bg: #282828;
+    --toolbar-border: #3a3a3a;
+    --btn-hover: #363636;
+    --btn-active: #464646;
+    --placeholder: #666666;
+    --link: #6699ff;
+    --quote-border: #444444;
+    --quote-fg: #888888;
+  }
+}
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+body { display: flex; flex-direction: column; }
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1px;
+  padding: 4px 8px;
+  background: var(--toolbar-bg);
+  border-bottom: 1px solid var(--toolbar-border);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.toolbar button {
+  background: none;
+  border: none;
+  border-radius: 4px;
+  padding: 0 7px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--fg);
+  height: 26px;
+  min-width: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.1s;
+}
+.toolbar button:hover { background: var(--btn-hover); }
+.toolbar button:active { background: var(--btn-active); }
+.toolbar button.active { background: var(--btn-active); }
+
+/* colour button: stacked A + swatch bar */
+#btn-color {
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 7px;
+}
+#btn-color .color-letter {
+  font-size: 12px;
+  font-weight: bold;
+  line-height: 1;
+}
+#btn-color .color-swatch {
+  width: 14px;
+  height: 3px;
+  border-radius: 1px;
+  background: #cc0000;
+}
+
+/* colour picker popup */
+.color-popup {
+  position: absolute;
+  z-index: 100;
+  background: var(--toolbar-bg);
+  border: 1px solid var(--toolbar-border);
+  border-radius: 6px;
+  padding: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  user-select: none;
+}
+.color-grid {
+  display: grid;
+  grid-template-columns: repeat(10, 16px);
+  gap: 3px;
+}
+.color-grid .swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  border: 1px solid rgba(128, 128, 128, 0.4);
+  cursor: pointer;
+  padding: 0;
+}
+.color-grid .swatch:hover {
+  outline: 2px solid var(--link);
+}
+.color-more {
+  margin-top: 8px;
+  width: 100%;
+  height: 24px;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--toolbar-border);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.color-more:hover { background: var(--btn-hover); }
+
+.sep {
+  width: 1px;
+  height: 16px;
+  background: var(--toolbar-border);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+.toolbar select {
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--toolbar-border);
+  border-radius: 4px;
+  height: 26px;
+  font-size: 12px;
+  padding: 0 2px;
+}
+
+#font-family-select {
+  max-width: 120px;
+}
+
+.editor.format-painter-active {
+  cursor: crosshair;
+}
+
+#btn-format-painter svg {
+  display: block;
+}
+
+.editor {
+  flex: 1;
+  padding: 12px 16px;
+  outline: none;
+  overflow-y: auto;
+  word-wrap: break-word;
+  color: var(--fg);
+  background: var(--bg);
+}
+
+.editor:empty::before {
+  content: attr(data-placeholder);
+  color: var(--placeholder);
+  pointer-events: none;
+  display: block;
+}
+
+.editor a { color: var(--link); }
+
+.editor blockquote {
+  border-left: 3px solid var(--quote-border);
+  margin: 4px 0 4px 0;
+  padding-left: 12px;
+  color: var(--quote-fg);
+}
+
+.editor img { max-width: 100%; height: auto; }
+
+.editor ul, .editor ol { padding-left: 1.5em; }
+
+/* Inline image resize overlay — an absolutely-positioned frame drawn over the
+   selected image with corner drag handles. The frame itself is click-through
+   (pointer-events:none) so clicks land on the image beneath; only the handles
+   are interactive. */
+#img-resize-overlay {
+  position: fixed;
+  display: none;
+  z-index: 50;
+  border: 1.5px solid var(--link);
+  pointer-events: none;
+}
+.img-resize-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: var(--bg);
+  border: 1.5px solid var(--link);
+  border-radius: 2px;
+  pointer-events: auto;
+}
+.img-resize-handle.handle-nw { top: -6px; left: -6px; cursor: nwse-resize; }
+.img-resize-handle.handle-ne { top: -6px; right: -6px; cursor: nesw-resize; }
+.img-resize-handle.handle-sw { bottom: -6px; left: -6px; cursor: nesw-resize; }
+.img-resize-handle.handle-se { bottom: -6px; right: -6px; cursor: nwse-resize; }
+</style>
+</head>
+<body>
+<div class="toolbar" id="toolbar">
+  <button title="Format Painter — copy formatting, then apply it to the next selection" id="btn-format-painter" onmousedown="event.preventDefault(); toggleFormatPainter()"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M8 3C5.79 3 4 4.79 4 7V14C4 15.1 4.9 16 6 16H9V20C9 21.1 9.9 22 11 22H13C14.1 22 15 21.1 15 20V16H18C19.1 16 20 15.1 20 14V3H8M8 5H12V7H14V5H15V9H17V5H18V10H6V7C6 5.9 6.9 5 8 5M6 14V12H18V14H6Z"/></svg></button>
+  <span class="sep"></span>
+  <button title="Bold" id="btn-bold" onmousedown="event.preventDefault(); fmt('bold')"><b>B</b></button>
+  <button title="Italic" id="btn-italic" onmousedown="event.preventDefault(); fmt('italic')"><i>I</i></button>
+  <button title="Underline" id="btn-underline" onmousedown="event.preventDefault(); fmt('underline')"><u>U</u></button>
+  <button title="Strikethrough" id="btn-strike" onmousedown="event.preventDefault(); fmt('strikeThrough')"><s>S</s></button>
+  <span class="sep"></span>
+  <button id="btn-color" title="Font colour" onmousedown="event.preventDefault()" onclick="toggleColorPopup()">
+    <span class="color-letter">A</span>
+    <span class="color-swatch" id="color-swatch"></span>
+  </button>
+  <span class="sep"></span>
+  <select id="font-family-select" title="Font">
+    <option value="" hidden></option>
+    <option value="Arial" style="font-family:Arial">Arial</option>
+    <option value="Calibri" style="font-family:Calibri">Calibri</option>
+    <option value="Comic Sans MS" style="font-family:'Comic Sans MS'">Comic Sans MS</option>
+    <option value="Courier New" style="font-family:'Courier New'">Courier New</option>
+    <option value="Georgia" style="font-family:Georgia">Georgia</option>
+    <option value="Helvetica" style="font-family:Helvetica">Helvetica</option>
+    <option value="Tahoma" style="font-family:Tahoma">Tahoma</option>
+    <option value="Times New Roman" style="font-family:'Times New Roman'">Times New Roman</option>
+    <option value="Trebuchet MS" style="font-family:'Trebuchet MS'">Trebuchet MS</option>
+    <option value="Verdana" style="font-family:Verdana">Verdana</option>
+  </select>
+  <span class="sep"></span>
+  <select id="font-size-select" title="Font size">
+    <option value="" hidden></option>
+    <option value="10">10</option>
+    <option value="12">12</option>
+    <option value="14">14</option>
+    <option value="16">16</option>
+    <option value="18">18</option>
+    <option value="20">20</option>
+    <option value="24">24</option>
+    <option value="28">28</option>
+    <option value="32">32</option>
+    <option value="36">36</option>
+    <option value="48">48</option>
+  </select>
+  <span class="sep"></span>
+  <button title="Bullet list" onmousedown="event.preventDefault(); fmt('insertUnorderedList')">&#x2022;&#x2261;</button>
+  <button title="Numbered list" onmousedown="event.preventDefault(); fmt('insertOrderedList')">1&#x2261;</button>
+  <span class="sep"></span>
+  <button title="Decrease indent" onmousedown="event.preventDefault(); fmt('outdent')">&#x21E4;</button>
+  <button title="Increase indent" onmousedown="event.preventDefault(); fmt('indent')">&#x21E5;</button>
+  <span class="sep"></span>
+  <button title="Insert link" id="btn-link" onmousedown="event.preventDefault(); requestLink()">&#x1F517;</button>
+  <button title="Remove formatting" onmousedown="event.preventDefault(); fmt('removeFormat')">&#x2715;</button>
+  <button title="Attach file" id="btn-attach" style="margin-left:auto; display:none" onmousedown="event.preventDefault(); requestAttach()">&#x1F4CE;</button>
+</div>
+<div class="color-popup" id="color-popup" style="display:none;">
+  <div class="color-grid" id="color-grid"></div>
+  <button class="color-more" onmousedown="event.preventDefault()" onclick="openCustomColor()">Custom…</button>
+</div>
+<input type="color" id="color-input" style="position:fixed; opacity:0; width:0; height:0; pointer-events:none;" value="#cc0000">
+<div class="editor" id="editor" contenteditable="true" spellcheck="true" data-placeholder="Write your message here…"></div>
+
+<script>
+const editor = document.getElementById('editor');
+const colorInput = document.getElementById('color-input');
+const colorSwatch = document.getElementById('color-swatch');
+let changeTimer = null;
+
+// Initialise swatch to match the input's default value
+colorSwatch.style.background = colorInput.value;
+
+function fmt(cmd) {
+  document.execCommand(cmd, false, null);
+  editor.focus();
+  scheduleChange();
+}
+
+function _flutterNotify(name, value) {
+  if (window.flutter_inappwebview) {
+    window.flutter_inappwebview.callHandler(name, value);
+  } else if (window[name]) {
+    window[name].postMessage(value !== undefined ? String(value) : '');
+  }
+}
+
+// --- Font colour -----------------------------------------------------------
+// A custom palette popup is used instead of triggering the OS-native colour
+// picker directly: the native picker stays open after a colour is chosen (and
+// there is no reliable way to force-close an OS colour popup from JS), whereas
+// clicking a swatch here closes the popup immediately and returns focus to the
+// editor so the user can keep typing in the chosen colour. The native picker
+// remains available behind "Custom…" for arbitrary colours.
+const colorPopup = document.getElementById('color-popup');
+const colorGrid = document.getElementById('color-grid');
+const COLOR_PALETTE = [
+  '#000000','#434343','#666666','#999999','#b7b7b7','#cccccc','#d9d9d9','#efefef','#f3f3f3','#ffffff',
+  '#980000','#ff0000','#ff9900','#ffff00','#00ff00','#00ffff','#4a86e8','#0000ff','#9900ff','#ff00ff',
+  '#e6b8af','#f4cccc','#fce5cd','#fff2cc','#d9ead3','#d0e0e3','#c9daf8','#cfe2f3','#d9d2e9','#ead1dc',
+  '#dd7e6b','#ea9999','#f9cb9c','#ffe599','#b6d7a8','#a2c4c9','#a4c2f4','#9fc5e8','#b4a7d6','#d5a6bd',
+  '#cc4125','#e06666','#f6b26b','#ffd966','#93c47d','#76a5af','#6d9eeb','#6fa8dc','#8e7cc3','#c27ba0',
+];
+COLOR_PALETTE.forEach(function(hex) {
+  const b = document.createElement('button');
+  b.className = 'swatch';
+  b.style.background = hex;
+  b.title = hex;
+  // preventDefault on mousedown keeps the editor's selection intact
+  b.addEventListener('mousedown', function(e) { e.preventDefault(); });
+  b.addEventListener('click', function() { applyColor(hex); });
+  colorGrid.appendChild(b);
+});
+
+function toggleColorPopup() {
+  if (colorPopup.style.display === 'block') { closeColorPopup(); return; }
+  const btn = document.getElementById('btn-color');
+  const r = btn.getBoundingClientRect();
+  colorPopup.style.display = 'block';
+  const w = colorPopup.offsetWidth;
+  let left = r.left;
+  if (left + w > window.innerWidth - 4) left = window.innerWidth - w - 4;
+  if (left < 4) left = 4;
+  colorPopup.style.left = left + 'px';
+  colorPopup.style.top = (r.bottom + 4) + 'px';
+}
+
+function closeColorPopup() {
+  colorPopup.style.display = 'none';
+}
+
+function applyColor(color) {
+  closeColorPopup();
+  colorSwatch.style.background = color;
+  colorInput.value = color;
+  editor.focus();
+  document.execCommand('foreColor', false, color);
+  scheduleChange();
+}
+
+function openCustomColor() {
+  closeColorPopup();
+  colorInput.click();
+}
+
+// Dismiss the popup on an outside click or Escape.
+document.addEventListener('mousedown', function(e) {
+  if (colorPopup.style.display === 'block' &&
+      !colorPopup.contains(e.target) &&
+      !document.getElementById('btn-color').contains(e.target)) {
+    closeColorPopup();
+  }
+});
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeColorPopup();
+});
+
+colorInput.addEventListener('input', function(e) {
+  const color = e.target.value;
+  colorSwatch.style.background = color;
+  editor.focus();
+  document.execCommand('foreColor', false, color);
+  scheduleChange();
+});
+// --- Font size -------------------------------------------------------------
+// execCommand has no direct way to set an arbitrary pixel font size, so we
+// use the legacy 1-7 'fontSize' command with the out-of-range value 7 as a
+// marker: it always wraps the affected content (or, for a collapsed
+// selection, an empty node at the caret so future typing inherits it) in a
+// single predictable <font size="7"> element that we then rewrite in place.
+const fontSizeSelect = document.getElementById('font-size-select');
+
+function setFontSize(px) {
+  document.execCommand('fontSize', false, '7');
+  editor.querySelectorAll('font[size="7"]').forEach(function(f) {
+    f.removeAttribute('size');
+    f.style.fontSize = px + 'px';
+  });
+  scheduleChange();
+}
+
+function restoreSavedSelection() {
+  editor.focus();
+  if (savedRange && _rangeInEditor(savedRange)) {
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(savedRange);
+  }
+}
+
+// The <select> steals focus (and with it, the editor's selection) the moment
+// it's opened, so the caret/range must be captured beforehand and restored
+// before applying the size.
+fontSizeSelect.addEventListener('mousedown', function() {
+  saveSelection();
+});
+fontSizeSelect.addEventListener('change', function() {
+  const px = this.value;
+  restoreSavedSelection();
+  if (px) setFontSize(px);
+  this.blur();
+});
+
+// The element the caret is currently in (or null if the selection isn't in
+// the editor). Used to read the font/size at the cursor.
+function _caretElement() {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return null;
+  let node = sel.getRangeAt(0).startContainer;
+  if (node.nodeType === Node.TEXT_NODE) node = node.parentElement;
+  if (!node || !editor.contains(node)) return null;
+  return node;
+}
+
+// Makes a <select> display [value] even when it isn't one of the ship-time
+// presets, by parking the current value in a single reusable option. This lets
+// the size/font boxes reflect whatever the caret actually sits on (e.g. the
+// 13px default body text, or a font pasted in from another mail client) rather
+// than blanking out whenever the value isn't a preset.
+function _reflectInSelect(select, value, label) {
+  if (!value) { select.value = ''; return; }
+  const preset = Array.from(select.options).find(function(o) {
+    return !o.hasAttribute('data-dynamic') && o.value === value;
+  });
+  if (preset) { select.value = value; return; }
+  let dyn = select.querySelector('option[data-dynamic]');
+  if (!dyn) {
+    dyn = document.createElement('option');
+    dyn.setAttribute('data-dynamic', '');
+    select.appendChild(dyn);
+  }
+  dyn.value = value;
+  dyn.textContent = label != null ? label : value;
+  select.value = value;
+}
+
+function updateFontSizeSelect() {
+  const node = _caretElement();
+  if (!node) return;
+  const size = Math.round(parseFloat(getComputedStyle(node).fontSize));
+  _reflectInSelect(fontSizeSelect, size ? String(size) : '', null);
+}
+
+// --- Font family -----------------------------------------------------------
+// Mirrors the font-size control: the <select> steals the editor's selection
+// when opened, so snapshot the range on mousedown and restore it before
+// applying. 'fontName' wraps the selection (or the caret's typing state) in a
+// <font face="..."> element.
+const fontFamilySelect = document.getElementById('font-family-select');
+
+function setFontName(family) {
+  document.execCommand('fontName', false, family);
+  scheduleChange();
+}
+
+fontFamilySelect.addEventListener('mousedown', function() {
+  saveSelection();
+});
+fontFamilySelect.addEventListener('change', function() {
+  const family = this.value;
+  restoreSavedSelection();
+  if (family) setFontName(family);
+  this.blur();
+});
+
+// Generic / system-UI keywords aren't real family names — the app's default
+// body stack begins with them (e.g. "-apple-system") — so they're skipped when
+// working out which concrete font is actually on screen.
+function _isGenericFamily(key) {
+  return key === '' || key === 'sans-serif' || key === 'serif' ||
+      key === 'monospace' || key === 'cursive' || key === 'fantasy' ||
+      key === 'system-ui' || key === '-apple-system' ||
+      key === 'blinkmacsystemfont' || key === 'ui-sans-serif' ||
+      key === 'ui-serif' || key === 'ui-monospace';
+}
+
+// Resolves a computed font-family stack to the family the user should see in
+// the box. getComputedStyle returns the *declared* stack, not the rendered
+// font, so the default body text reads back as its whole system-UI stack. We
+// resolve it to a concrete name:
+//  - If the stack starts with a concrete family, it's a chosen/quoted font —
+//    show it verbatim (even if not installed locally, that's the intended font).
+//  - Otherwise it's the default UI stack; report the first family the OS can
+//    actually render (via document.fonts.check) so the box shows the real font
+//    (e.g. "Segoe UI" on Windows) instead of a system keyword.
+function _resolveFontFamily(cssValue) {
+  if (!cssValue) return '';
+  const families = cssValue.split(',').map(function(f) {
+    return f.trim().replace(/^["']|["']$/g, '');
+  });
+  if (families.length && !_isGenericFamily(families[0].toLowerCase())) {
+    return families[0];
+  }
+  for (let i = 0; i < families.length; i++) {
+    const fam = families[i];
+    if (_isGenericFamily(fam.toLowerCase())) continue;
+    try {
+      if (document.fonts && document.fonts.check('16px "' + fam + '"')) return fam;
+    } catch (_) { /* check unsupported — ignore */ }
+  }
+  return '';
+}
+
+function updateFontFamilySelect() {
+  const node = _caretElement();
+  if (!node) return;
+  const family = _resolveFontFamily(getComputedStyle(node).fontFamily);
+  const key = family.toLowerCase();
+  const preset = Array.from(fontFamilySelect.options).find(function(o) {
+    return !o.hasAttribute('data-dynamic') && o.value.toLowerCase() === key;
+  });
+  if (preset) { fontFamilySelect.value = preset.value; return; }
+  _reflectInSelect(fontFamilySelect, family, family);
+}
+
+// --- Format painter ----------------------------------------------------
+// Captures the formatting of the current selection, then applies it to
+// whatever the user selects next (one shot), like the "format painter" tool
+// in desktop word processors.
+let paintedFormat = null;
+
+function toggleFormatPainter() {
+  if (paintedFormat) {
+    cancelFormatPainter();
+    return;
+  }
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+  let node = sel.getRangeAt(0).startContainer;
+  if (node.nodeType === Node.TEXT_NODE) node = node.parentElement;
+  if (!node) return;
+
+  const cs = getComputedStyle(node);
+  paintedFormat = {
+    bold: parseInt(cs.fontWeight, 10) >= 600,
+    italic: cs.fontStyle === 'italic',
+    underline: cs.textDecorationLine.indexOf('underline') !== -1,
+    strike: cs.textDecorationLine.indexOf('line-through') !== -1,
+    color: cssColorToHex(cs.color),
+    fontSize: Math.round(parseFloat(cs.fontSize)),
+  };
+  document.getElementById('btn-format-painter').classList.add('active');
+  editor.classList.add('format-painter-active');
+}
+
+function cancelFormatPainter() {
+  paintedFormat = null;
+  document.getElementById('btn-format-painter').classList.remove('active');
+  editor.classList.remove('format-painter-active');
+}
+
+function applyPaintedFormat() {
+  if (!paintedFormat) return;
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+
+  document.execCommand('removeFormat', false, null);
+  if (paintedFormat.bold) document.execCommand('bold', false, null);
+  if (paintedFormat.italic) document.execCommand('italic', false, null);
+  if (paintedFormat.underline) document.execCommand('underline', false, null);
+  if (paintedFormat.strike) document.execCommand('strikeThrough', false, null);
+  if (paintedFormat.color) document.execCommand('foreColor', false, paintedFormat.color);
+  if (paintedFormat.fontSize) setFontSize(paintedFormat.fontSize);
+
+  cancelFormatPainter();
+  scheduleChange();
+}
+
+function _maybeApplyFormatPainter() {
+  if (!paintedFormat) return;
+  const sel = window.getSelection();
+  if (sel && !sel.isCollapsed && editor.contains(sel.anchorNode)) {
+    applyPaintedFormat();
+  }
+}
+editor.addEventListener('mouseup', _maybeApplyFormatPainter);
+editor.addEventListener('keyup', function(e) {
+  if (e.shiftKey) _maybeApplyFormatPainter();
+});
+editor.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape' && paintedFormat) cancelFormatPainter();
+});
+
+function requestLink() {
+  _flutterNotify('onLinkRequest');
+}
+
+function requestAttach() {
+  _flutterNotify('onAttachRequest');
+}
+
+// Called by the host when it wants to opt into attachment support (e.g. an
+// email compose editor). Hidden by default so generic rich-text uses (e.g.
+// a recipe editor) don't show an affordance with nothing wired up behind it.
+function setAttachButtonVisible(visible) {
+  document.getElementById('btn-attach').style.display = visible ? '' : 'none';
+}
+
+// Called by the host when no link-request handler is wired up.
+function setLinkButtonVisible(visible) {
+  document.getElementById('btn-link').style.display = visible ? '' : 'none';
+}
+
+function insertLink(url) {
+  editor.focus();
+  document.execCommand('createLink', false, url);
+  scheduleChange();
+}
+
+function scheduleChange() {
+  clearTimeout(changeTimer);
+  changeTimer = setTimeout(fireChange, 300);
+}
+
+// Serialising editor.innerHTML is O(DOM size) — with a large quoted reply
+// body this can block the main thread for a while. Defer it to an idle
+// slot so it doesn't compete with the next keystroke if the user resumes
+// typing right as the debounce timer fires.
+function _cleanHtml() {
+  return editor.innerHTML.replace(/​/g, '');
+}
+
+function fireChange() {
+  if (window.requestIdleCallback) {
+    requestIdleCallback(function() {
+      _flutterNotify('onContentChanged', _cleanHtml());
+    }, {timeout: 500});
+  } else {
+    _flutterNotify('onContentChanged', _cleanHtml());
+  }
+}
+
+function setContent(html) {
+  deselectImage();
+  editor.innerHTML = html;
+  const range = document.createRange();
+  const sel = window.getSelection();
+  if (editor.firstChild) {
+    range.setStart(editor, 0);
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+}
+
+function getContent() {
+  return _cleanHtml();
+}
+
+function focusEditor() {
+  editor.focus();
+  const sel = window.getSelection();
+  if (sel.rangeCount === 0 || !_rangeInEditor(sel.getRangeAt(0))) {
+    const range = document.createRange();
+    if (editor.firstChild) {
+      range.setStart(editor, 0);
+    } else {
+      range.selectNodeContents(editor);
+    }
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+}
+
+function insertImage(dataUri, contentId) {
+  editor.focus();
+  const img = document.createElement('img');
+  img.src = dataUri;
+  img.setAttribute('data-cid', contentId);
+  img.style.maxWidth = '100%';
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount > 0) {
+    const range = sel.getRangeAt(0);
+    range.deleteContents();
+    range.insertNode(img);
+    range.setStartAfter(img);
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  } else {
+    editor.appendChild(img);
+  }
+  scheduleChange();
+}
+
+// --- Inline image resizing -------------------------------------------------
+// Clicking an image selects it and shows a resize frame with four corner
+// handles; dragging a handle resizes the image while preserving its aspect
+// ratio. Delete/Backspace removes the selected image. The overlay is kept
+// outside the contenteditable subtree (appended to <body>) so execCommand and
+// serialisation never see it.
+let selectedImg = null;
+let resizeState = null;
+
+const imgOverlay = document.createElement('div');
+imgOverlay.id = 'img-resize-overlay';
+const IMG_HANDLES = ['nw', 'ne', 'sw', 'se'];
+IMG_HANDLES.forEach(function(pos) {
+  const h = document.createElement('div');
+  h.className = 'img-resize-handle handle-' + pos;
+  h.dataset.pos = pos;
+  h.addEventListener('mousedown', function(e) { startImageResize(e, pos); });
+  imgOverlay.appendChild(h);
+});
+document.body.appendChild(imgOverlay);
+
+function positionImgOverlay() {
+  if (!selectedImg) return;
+  const r = selectedImg.getBoundingClientRect();
+  imgOverlay.style.left = r.left + 'px';
+  imgOverlay.style.top = r.top + 'px';
+  imgOverlay.style.width = r.width + 'px';
+  imgOverlay.style.height = r.height + 'px';
+}
+
+function selectImage(img) {
+  selectedImg = img;
+  imgOverlay.style.display = 'block';
+  positionImgOverlay();
+}
+
+function deselectImage() {
+  if (!selectedImg) return;
+  selectedImg = null;
+  imgOverlay.style.display = 'none';
+}
+
+function startImageResize(e, pos) {
+  if (!selectedImg) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const rect = selectedImg.getBoundingClientRect();
+  resizeState = {
+    startX: e.clientX,
+    startW: rect.width,
+    // Left-edge handles grow the image as the pointer moves left.
+    left: pos === 'nw' || pos === 'sw',
+  };
+  document.addEventListener('mousemove', onImageResizeMove);
+  document.addEventListener('mouseup', onImageResizeEnd);
+}
+
+function onImageResizeMove(e) {
+  if (!resizeState || !selectedImg) return;
+  const dx = e.clientX - resizeState.startX;
+  const deltaW = resizeState.left ? -dx : dx;
+  const newW = Math.max(24, Math.round(resizeState.startW + deltaW));
+  // Width alone drives the size; height:auto preserves the aspect ratio. Drop
+  // any legacy width/height attributes so the inline style is authoritative.
+  selectedImg.removeAttribute('width');
+  selectedImg.removeAttribute('height');
+  selectedImg.style.width = newW + 'px';
+  selectedImg.style.height = 'auto';
+  positionImgOverlay();
+}
+
+function onImageResizeEnd() {
+  document.removeEventListener('mousemove', onImageResizeMove);
+  document.removeEventListener('mouseup', onImageResizeEnd);
+  if (resizeState) {
+    resizeState = null;
+    scheduleChange();
+  }
+}
+
+editor.addEventListener('click', function(e) {
+  if (e.target && e.target.tagName === 'IMG') {
+    selectImage(e.target);
+  } else {
+    deselectImage();
+  }
+});
+
+// A mousedown anywhere that isn't the selected image or a handle dismisses the
+// selection (e.g. clicking into the toolbar or another part of the document).
+document.addEventListener('mousedown', function(e) {
+  if (resizeState) return;
+  if (e.target === selectedImg || imgOverlay.contains(e.target)) return;
+  deselectImage();
+});
+
+// Typing or editing invalidates the frame's position/target, so drop it. A
+// selected image is removed by Delete/Backspace rather than editing text.
+editor.addEventListener('keydown', function(e) {
+  if (!selectedImg) return;
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    e.preventDefault();
+    const img = selectedImg;
+    deselectImage();
+    img.remove();
+    scheduleChange();
+  } else {
+    deselectImage();
+  }
+});
+
+// Keep the frame glued to the image as the editor scrolls or the window resizes.
+editor.addEventListener('scroll', positionImgOverlay);
+window.addEventListener('resize', positionImgOverlay);
+
+// --- Caret-tracked insertion (used for streaming AI drafts) ----------------
+var savedRange = null;
+
+function _rangeInEditor(range) {
+  return range && editor.contains(range.commonAncestorContainer);
+}
+
+// Keep savedRange current as the caret moves inside the editor, so it survives
+// the editor losing focus (e.g. when the AI prompt dialog opens).
+document.addEventListener('selectionchange', function() {
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount > 0) {
+    const r = sel.getRangeAt(0);
+    if (_rangeInEditor(r)) savedRange = r.cloneRange();
+  }
+});
+
+// Explicit snapshot; returns true if a caret inside the editor was captured.
+function saveSelection() {
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount > 0) {
+    const r = sel.getRangeAt(0);
+    if (_rangeInEditor(r)) { savedRange = r.cloneRange(); return true; }
+  }
+  return false;
+}
+
+function _endOfEditorRange() {
+  const r = document.createRange();
+  r.selectNodeContents(editor);
+  r.collapse(false);
+  return r;
+}
+
+// Inserts text at the saved caret (or the end of the editor as a fallback),
+// converting newlines to <br>, and advances the saved caret past it. Does not
+// reset the user's selection or rewrite innerHTML, so streaming stays smooth.
+function insertAtSaved(text) {
+  if (!text) return;
+  let range = (savedRange && _rangeInEditor(savedRange))
+      ? savedRange
+      : _endOfEditorRange();
+  range.deleteContents();
+
+  const frag = document.createDocumentFragment();
+  const parts = String(text).split('\n');
+  for (let i = 0; i < parts.length; i++) {
+    if (i > 0) frag.appendChild(document.createElement('br'));
+    if (parts[i]) frag.appendChild(document.createTextNode(parts[i]));
+  }
+  const lastNode = frag.lastChild;
+  range.insertNode(frag);
+  if (lastNode) {
+    range.setStartAfter(lastNode);
+    range.collapse(true);
+  }
+  savedRange = range.cloneRange();
+  scheduleChange();
+}
+
+function _checkOrdinalSuffix() {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return;
+  const range = sel.getRangeAt(0);
+  if (!range.collapsed) return;
+
+  const node = range.startContainer;
+  const offset = range.startOffset;
+  if (node.nodeType !== Node.TEXT_NODE || offset < 3) return;
+  if (node.parentElement && node.parentElement.tagName === 'SUP') return;
+
+  const textBefore = node.textContent.slice(0, offset);
+  if (!/\d(st|nd|rd|th)$/.test(textBefore)) return;
+
+  // Split: node → beforeSuffix, suffix → supText, text after cursor → afterNode
+  const afterNode = node.splitText(offset);
+  const supText   = node.splitText(offset - 2);
+
+  const sup = document.createElement('sup');
+  node.parentNode.insertBefore(sup, afterNode);
+  sup.appendChild(supText);
+
+  // WebKit inherits the superscript "typing attributes" from the character
+  // immediately before the cursor. Inserting a zero-width space into afterNode
+  // gives WebKit a non-superscript character to the left of the cursor, so the
+  // next typed character is rendered in normal (baseline) text. The ZWS is
+  // stripped from HTML output in fireChange/getContent so it never reaches the
+  // email body.
+  afterNode.textContent = '​' + afterNode.textContent;
+  const newRange = document.createRange();
+  newRange.setStart(afterNode, 1); // after the ZWS, outside <sup>
+  newRange.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(newRange);
+
+  scheduleChange();
+}
+
+// --- Paste handling ---------------------------------------------------
+// Contenteditable's default paste keeps the clipboard's real HTML as-is
+// (fine), but plain-text-only clipboard content that happens to *look* like
+// HTML markup (e.g. copied as source text from a code editor) would
+// otherwise be inserted as literal escaped text. Detect that case and render
+// it instead.
+function _looksLikeHtml(text) {
+  return /<\/?[a-z][a-z0-9]*(\s[^<>]*)?>/i.test(text);
+}
+
+// Strips script/style/event-handler content so pasted markup can't execute
+// script inside the editor.
+function _sanitizeHtmlFragment(html) {
+  const container = document.createElement('div');
+  container.innerHTML = html;
+  const root = container.querySelector('body') || container;
+  root.querySelectorAll('script,style,meta,link,title,head,object,embed,iframe')
+      .forEach(function(el) { el.remove(); });
+  root.querySelectorAll('*').forEach(function(el) {
+    Array.from(el.attributes).forEach(function(attr) {
+      const name = attr.name.toLowerCase();
+      if (name.indexOf('on') === 0) {
+        el.removeAttribute(attr.name);
+      } else if ((name === 'href' || name === 'src') &&
+                 /^\s*javascript:/i.test(attr.value)) {
+        el.removeAttribute(attr.name);
+      }
+    });
+  });
+  return root.innerHTML;
+}
+
+function _escapePlainTextToHtml(text) {
+  return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .split('\n')
+      .join('<br>');
+}
+
+// Returns the first clipboard entry that is an actual image file/blob (e.g. a
+// screenshot or a copied image), or null. A copied *text* selection never
+// populates a file entry, so this reliably distinguishes "paste an image" from
+// "paste rich text that happens to contain images".
+function _findImageFile(cd) {
+  if (cd.items) {
+    for (let i = 0; i < cd.items.length; i++) {
+      const it = cd.items[i];
+      if (it.kind === 'file' && it.type && it.type.indexOf('image/') === 0) {
+        const f = it.getAsFile();
+        if (f) return f;
+      }
+    }
+  }
+  if (cd.files) {
+    for (let i = 0; i < cd.files.length; i++) {
+      const f = cd.files[i];
+      if (f.type && f.type.indexOf('image/') === 0) return f;
+    }
+  }
+  return null;
+}
+
+editor.addEventListener('paste', function(e) {
+  const cd = e.clipboardData || window.clipboardData;
+  if (!cd) return; // fall back to the browser's default paste behaviour
+
+  // An image on the clipboard is embedded inline: read it as a data URL and
+  // hand it to the host, which registers it as an inline attachment (with a
+  // Content-Id) and inserts it via insertImage(). Doing it host-side keeps the
+  // send-time cid: substitution working — a bare data: URI would otherwise be
+  // stripped by many mail servers.
+  const imageFile = _findImageFile(cd);
+  if (imageFile) {
+    e.preventDefault();
+    const reader = new FileReader();
+    reader.onload = function() {
+      _flutterNotify('onImagePasted', reader.result);
+    };
+    reader.readAsDataURL(imageFile);
+    return;
+  }
+
+  e.preventDefault();
+
+  const html = cd.getData('text/html');
+  if (html) {
+    document.execCommand('insertHTML', false, _sanitizeHtmlFragment(html));
+    scheduleChange();
+    return;
+  }
+
+  const text = cd.getData('text/plain') || '';
+  const asHtml = _looksLikeHtml(text)
+      ? _sanitizeHtmlFragment(text)
+      : _escapePlainTextToHtml(text);
+  document.execCommand('insertHTML', false, asHtml);
+  scheduleChange();
+});
+
+editor.addEventListener('input', function() {
+  _checkOrdinalSuffix();
+  scheduleChange();
+});
+
+editor.addEventListener('keydown', function(e) {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    document.execCommand('insertHTML', false, '    ');
+    scheduleChange();
+  }
+
+  if (e.key === ' ') {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    const range = sel.getRangeAt(0);
+    if (!range.collapsed) return;
+
+    const node = range.startContainer;
+    const offset = range.startOffset;
+    if (node.nodeType !== Node.TEXT_NODE || offset < 1) return;
+
+    // Only trigger when the text before the cursor is exactly '-'
+    if (node.textContent.slice(0, offset) !== '-') return;
+
+    // Find the containing block (P, DIV, LI, BLOCKQUOTE, or the editor itself)
+    let block = node.parentElement;
+    while (block && block !== editor &&
+           !['P','DIV','LI','BLOCKQUOTE'].includes(block.tagName)) {
+      block = block.parentElement;
+    }
+    const searchRoot = (block && block !== editor) ? block : editor;
+
+    // Confirm nothing precedes this text node in the block
+    let textBeforeNode = '';
+    const walker = document.createTreeWalker(searchRoot, NodeFilter.SHOW_TEXT);
+    let t;
+    while ((t = walker.nextNode()) !== null) {
+      if (t === node) break;
+      textBeforeNode += t.textContent;
+    }
+    if (textBeforeNode !== '') return;
+
+    e.preventDefault();
+    // Select and delete the '-' character
+    const delRange = document.createRange();
+    delRange.setStart(node, 0);
+    delRange.setEnd(node, 1);
+    sel.removeAllRanges();
+    sel.addRange(delRange);
+    document.execCommand('delete', false, null);
+    // Convert the current block into a bullet list item
+    document.execCommand('insertUnorderedList', false, null);
+    scheduleChange();
+  }
+});
+
+// Update toolbar button active states and colour swatch on selection change.
+// document.queryCommandState()/queryCommandValue() do synchronous style
+// computation that scales with DOM size/complexity, and selectionchange
+// fires on every keystroke (typing moves the caret). With a large quoted
+// reply body in the editor, calling these unthrottled froze the UI while
+// typing. Coalesce to at most once per animation frame instead.
+let toolbarUpdateScheduled = false;
+function updateToolbarState() {
+  toolbarUpdateScheduled = false;
+  ['bold','italic','underline','strikeThrough'].forEach(function(cmd) {
+    const id = {'bold':'btn-bold','italic':'btn-italic','underline':'btn-underline','strikeThrough':'btn-strike'}[cmd];
+    const btn = document.getElementById(id);
+    if (btn) btn.classList.toggle('active', document.queryCommandState(cmd));
+  });
+
+  // Reflect the foreground colour at the cursor in the swatch
+  const raw = document.queryCommandValue('foreColor');
+  if (raw) {
+    const hex = cssColorToHex(raw);
+    if (hex) {
+      colorSwatch.style.background = hex;
+      colorInput.value = hex;
+    }
+  }
+
+  updateFontSizeSelect();
+  updateFontFamilySelect();
+}
+document.addEventListener('selectionchange', function() {
+  if (toolbarUpdateScheduled) return;
+  toolbarUpdateScheduled = true;
+  requestAnimationFrame(updateToolbarState);
+});
+
+// Converts CSS rgb(...) or #rrggbb strings returned by queryCommandValue to #rrggbb
+function cssColorToHex(color) {
+  const m = color.match(/^rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/);
+  if (m) {
+    return '#' + [m[1], m[2], m[3]]
+      .map(n => parseInt(n, 10).toString(16).padStart(2, '0'))
+      .join('');
+  }
+  if (/^#[0-9a-fA-F]{6}$/.test(color)) return color;
+  return null;
+}
+</script>
+</body>
+</html>

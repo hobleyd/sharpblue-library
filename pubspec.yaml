@@ -1,0 +1,33 @@
+name: sharpblue_library
+description: "Reusable Flutter components shared across Sharpblue apps (nightmail, recipes, ...)."
+version: 0.1.0
+publish_to: 'none'
+
+environment:
+  sdk: ^3.11.3
+  flutter: '>=3.19.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  window_manager: ^0.5.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  plugin:
+    platforms:
+      linux:
+        pluginClass: HtmlViewPlugin
+        fileName: html_view_plugin.cc
+      macos:
+        pluginClass: HtmlViewPlugin
+      windows:
+        pluginClass: HtmlViewPluginCApi
+        fileName: html_view_plugin_c_api.cpp
+
+  assets:
+    - assets/editor/editor.html
