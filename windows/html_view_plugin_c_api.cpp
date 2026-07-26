@@ -1,4 +1,4 @@
-#include "include/html_view/html_view_plugin_c_api.h"
+#include "include/sharpblue_library/html_view_plugin_c_api.h"
 
 #include <flutter/plugin_registrar_windows.h>
 

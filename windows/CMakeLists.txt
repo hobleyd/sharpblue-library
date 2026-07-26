@@ -31,7 +31,7 @@ add_custom_command(
 # Plugin sources
 # ---------------------------------------------------------------------------
 add_library(${PLUGIN_NAME} SHARED
-  "include/html_view/html_view_plugin_c_api.h"
+  "include/sharpblue_library/html_view_plugin_c_api.h"
   "html_view_plugin_c_api.cpp"
   "html_view_plugin.h"
   "html_view_plugin.cpp"

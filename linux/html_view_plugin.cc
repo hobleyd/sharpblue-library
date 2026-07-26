@@ -1,4 +1,4 @@
-#include "include/html_view/html_view_plugin.h"
+#include "include/sharpblue_library/html_view_plugin.h"
 
 #include <flutter_linux/flutter_linux.h>
 #include <gtk/gtk.h>
